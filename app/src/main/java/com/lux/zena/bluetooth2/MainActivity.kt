@@ -116,10 +116,8 @@ class MainActivity : AppCompatActivity() {
             scanning=true
             val scanFilter:ScanFilter = ScanFilter.Builder()
 //                .setDeviceAddress("C6:AF:2E:CA:EE:1E")
-                .setServiceUuid(
-                    ParcelUuid(
-                    UUID.fromString("00001809-0000-1000-8000-00805f9b34fb"))
-                )
+                .setServiceUuid(ParcelUuid(
+                    UUID.fromString("00001809-0000-1000-8000-00805f9b34fb")))
                 .build()
             val scanSettings = ScanSettings.Builder()
                 .setScanMode(
