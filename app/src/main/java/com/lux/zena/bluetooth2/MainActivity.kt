@@ -46,6 +46,17 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
+    val bluetoothAdapter:BluetoothAdapter? by lazy {
+        if (Build.VERSION.SDK_INT>= Build.VERSION_CODES.S){
+            val bluetoothManager = this.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            bluetoothManager.adapter
+        }else{
+            @Suppress("DEPRECATION")
+            BluetoothAdapter.getDefaultAdapter()
+        }
+    }
+
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -69,7 +80,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bluetoothLeScanner : BluetoothLeScanner
     private var scanning = false
     private val handler = Handler(Looper.getMainLooper())
-    private val scan_period = 10000L
+    private val scan_period = 5000L
 
     // scan filter 담는 배열
     var filters: MutableList<ScanFilter> = mutableListOf()
@@ -83,9 +94,11 @@ class MainActivity : AppCompatActivity() {
             //Log.i("blog","$callbackType, $result")
             if (result!=null){
                 deviceMacAddresses = result.device.toString()
+                Log.i("blog","$deviceMacAddresses")
             }
         }
     }
+
     // Scan Filter 를 사용하지 않고 찾는 scan 함수
 //    private fun scanLeDevice(){
 //        if (!scanning){
@@ -103,7 +116,10 @@ class MainActivity : AppCompatActivity() {
 //        }
 //    }
 
+    private var bluetoothGatt:BluetoothGatt? =null
+
     // Scan Filter 사용
+
 
     private fun scanLeDevice(){
         if (!scanning){
@@ -111,13 +127,20 @@ class MainActivity : AppCompatActivity() {
                 scanning=false
                 if (ActivityCompat.checkSelfPermission(this,Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED){
                     bluetoothLeScanner.stopScan(leScanCallback)
+                    Log.i("over","scan over")
+                    if (deviceMacAddresses!=null){
+                        val device :BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceMacAddresses)
+                        bluetoothGatt=device?.connectGatt(this,true,bluetoothGattCallback)
+
+                    }
                 }
             }, scan_period)
             scanning=true
             val scanFilter:ScanFilter = ScanFilter.Builder()
 //                .setDeviceAddress("C6:AF:2E:CA:EE:1E")
-                .setServiceUuid(ParcelUuid(
-                    UUID.fromString("00001809-0000-1000-8000-00805f9b34fb")))
+//                .setServiceUuid(ParcelUuid(
+//                    UUID.fromString("00001809-0000-1000-8000-00805f9b34fb")))
+                .setDeviceName("BC-03")
                 .build()
             val scanSettings = ScanSettings.Builder()
                 .setScanMode(
@@ -129,6 +152,7 @@ class MainActivity : AppCompatActivity() {
         }else{
             scanning=false
             bluetoothLeScanner.stopScan(leScanCallback)
+            Log.i("over","scan over")
         }
     }
 
@@ -155,34 +179,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val bluetoothGattCallback = object : BluetoothGattCallback() {
+
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+            super.onServicesDiscovered(gatt, status)
+            Log.i("blog","discovered")
             if (status==BluetoothGatt.GATT_SUCCESS){
-                Log.i("blog","gat success")
+                Log.i("blog","success")
                 if (gatt!=null){
                     displayGattServices(gatt.services)
-                }else Log.i("displayGattService","")
-            }else Log.e("blog","got failed")
-        }
-
-        override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED ->{
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "Connected", Toast.LENGTH_SHORT).show()
-                        Log.i("tag","connected")
-                    }
-                    if (ActivityCompat.checkSelfPermission(this@MainActivity,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED) gatt?.discoverServices()
-
-                }
-                BluetoothProfile.STATE_DISCONNECTED ->{
-                    Log.i("blog","disconnected")
-                    Toast.makeText(this@MainActivity, "Disconnected", Toast.LENGTH_SHORT).show()
                 }
             }
         }
+        override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+            when (newState) {
+                BluetoothProfile.STATE_CONNECTED ->{
+//                    runOnUiThread {
+//                        Toast.makeText(this@MainActivity, "Connected", Toast.LENGTH_SHORT).show()
+//                        Log.i("tag","connected")
+//                    }
+                    Log.i("blog","connected")
+                    runOnUiThread { Toast.makeText(this@MainActivity, "connect", Toast.LENGTH_SHORT).show() }
+                    if (ActivityCompat.checkSelfPermission(this@MainActivity,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)
+                        gatt?.discoverServices()
+                }
+                BluetoothProfile.STATE_DISCONNECTED ->{
+                    Log.i("blog","disconnected")
+                    //Toast.makeText(this@MainActivity, "Disconnected", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        //        override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+//            if (status==BluetoothGatt.GATT_SUCCESS){
+//                Log.i("blog","gat success")
+//                if (gatt!=null){
+//                    //isplayGattServices(gatt.services)
+//                }else Log.i("displayGattService","")
+//            }else Log.e("blog","got failed")
+//        }
     }
 
-    private var bluetoothGatt:BluetoothGatt? =null
+
 
 
 
@@ -205,23 +242,16 @@ class MainActivity : AppCompatActivity() {
 
 
 
-        val bluetoothAdapter:BluetoothAdapter?=
-            if (Build.VERSION.SDK_INT>= Build.VERSION_CODES.S){
-                val bluetoothManager = this.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-                bluetoothManager.adapter
-            }else{
-                @Suppress("DEPRECATION")
-                BluetoothAdapter.getDefaultAdapter()
-            }
+
 
         var resultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult())
-            {
-                if(it.resultCode== Activity.RESULT_OK){
-                    Log.e("bluetooth","ok")
-                }else{
-                    Log.e("bluetooth","canceled")
-                }
+        {
+            if(it.resultCode== Activity.RESULT_OK){
+                Log.e("bluetooth","ok")
+            }else{
+                Log.e("bluetooth","canceled")
             }
+        }
 
         if (bluetoothAdapter?.isEnabled==false){
             val enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
@@ -233,7 +263,7 @@ class MainActivity : AppCompatActivity() {
         }else{
             //Device bluetooth 연결 가능
             //Toast.makeText(this, "device can support bluetooth", Toast.LENGTH_SHORT).show()
-            if(!bluetoothAdapter.isEnabled){
+            if(!bluetoothAdapter!!.isEnabled){
                 var enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
                 var resultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()
                 ) {
@@ -248,58 +278,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-//        val filter:IntentFilter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-//        registerReceiver(receiver,filter)
+
 
         bluetoothLeScanner= bluetoothAdapter!!.bluetoothLeScanner
         binding.tv.setOnClickListener {
             scanLeDevice()
         }
 
-        binding.tvConnect.setOnClickListener {
-            if (deviceMacAddresses!=""){
-                val bluetoothDevice = bluetoothAdapter.getRemoteDevice(deviceMacAddresses)
-
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
-                    bluetoothGatt = bluetoothDevice.connectGatt(applicationContext,false,bluetoothGattCallback)
-                    Log.i("blog","${bluetoothGatt.toString()}")
-                }else Log.i("blog","connection fail")
-
-            }
-        }
 
     }
 
 
-    override fun onStop() {
-        super.onStop()
-        bluetoothGatt?.let {
-            if (ActivityCompat.checkSelfPermission(this,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED) {
-                it.close()
-            }
-            bluetoothGatt=null
-        }
-    }
 
-//    override fun onDestroy() {
-//        super.onDestroy()
-//        unregisterReceiver(receiver)
-//
-//    }
-
-//    private val receiver = object : BroadcastReceiver() {
-//        override fun onReceive(p0: Context?, p1: Intent?) {
-//            if (ActivityCompat.checkSelfPermission(this@MainActivity,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED){
-//                when(p1?.action) {
-//                    BluetoothDevice.ACTION_FOUND->{
-//                        val device:BluetoothDevice? = p1.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
-//                        val deviceName = device?.name
-//                        val deviceAddress = device?.address
-//
-//                    }
-//                }
-//            }
-//        }
-
-    //askdflaksjdf
 }
