@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import com.lux.zena.bluetooth2.databinding.ActivityMainBinding
+import java.nio.charset.StandardCharsets
 import java.util.*
 
 class MainActivity : AppCompatActivity() {
@@ -137,10 +138,10 @@ class MainActivity : AppCompatActivity() {
             }, scan_period)
             scanning=true
             val scanFilter:ScanFilter = ScanFilter.Builder()
-//                .setDeviceAddress("C6:AF:2E:CA:EE:1E")
+                .setDeviceAddress("C6:AF:2E:CA:EE:1E")
 //                .setServiceUuid(ParcelUuid(
 //                    UUID.fromString("00001809-0000-1000-8000-00805f9b34fb")))
-                .setDeviceName("BC-03")
+                //.setDeviceName("BC-03")
                 .build()
             val scanSettings = ScanSettings.Builder()
                 .setScanMode(
@@ -156,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun displayGattServices(gattServices:List<BluetoothGattService>?){
+    private fun displayGattServices(gattServices: List<BluetoothGattService>?, gatt: BluetoothGatt){
         if (gattServices==null){
             Log.i("blog","gattService==null")
             return
@@ -173,12 +174,42 @@ class MainActivity : AppCompatActivity() {
                 characteristicUUID=gattCharacteristics.uuid.toString()
                 Log.i("blog","Characteristic: $characteristicUUID")
                 Log.i("blog","${gattCharacteristics.writeType}, ${gattCharacteristics.permissions}, ${gattCharacteristics.properties}")
+
+                gattCharacteristics.descriptors.forEach { descriptor ->
+                    Log.i("blog","descriptor: ${descriptor.uuid}")
+                }
             }
             Log.i("blog","~~~~~~~~~~~~~~~")
         }
     }
 
+
+
+    // 데이터 읽기
+    // 데이터 읽기 위한 변수
+    private lateinit var service:BluetoothGattService
+    private lateinit var service2:BluetoothGattService
+    private lateinit var readCharacteristic:BluetoothGattCharacteristic
+    private lateinit var readCharacteristic2: BluetoothGattCharacteristic
+
     private val bluetoothGattCallback = object : BluetoothGattCallback() {
+
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            super.onCharacteristicRead(gatt, characteristic, status)
+            //Log.i("blog","onCharacteristicRead")
+            if (status==BluetoothGatt.GATT_SUCCESS){
+                Log.i("blog","onCharacteristicRead")
+                val readValue:ByteArray = characteristic!!.value
+                val decodeValue:String = readValue.toString(
+                    StandardCharsets.UTF_8
+                )
+                Log.i("blog","$decodeValue")
+            }else Log.i("blog","fail to Read")
+        }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             super.onServicesDiscovered(gatt, status)
@@ -186,7 +217,10 @@ class MainActivity : AppCompatActivity() {
             if (status==BluetoothGatt.GATT_SUCCESS){
                 Log.i("blog","success")
                 if (gatt!=null){
-                    displayGattServices(gatt.services)
+                    displayGattServices(gatt.services,gatt)
+                    Log.i("blog","after read")
+                    gatt.readCharacteristic(readCharacteristic)
+
                 }
             }
         }
@@ -223,11 +257,13 @@ class MainActivity : AppCompatActivity() {
 
 
 
+
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         //setContentView(R.layout.activity_main)
         setContentView(binding.root)
-
         packageManager.takeIf { it.missingSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE) }?.also {
             Toast.makeText(this, "ble not supported", Toast.LENGTH_SHORT).show()
             finish()
@@ -285,9 +321,18 @@ class MainActivity : AppCompatActivity() {
             scanLeDevice()
         }
 
+        binding.tvRead.setOnClickListener {
+            service = bluetoothGatt!!.getService(UUID.fromString("00001809-0000-1000-8000-00805f9b34fb"))
 
+            readCharacteristic = service.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805F9B34FB"))
+
+            val descriptor:BluetoothGattDescriptor = readCharacteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805F9B34FB"))
+
+            //notifyDescriptor.value=BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+
+            if (ActivityCompat.checkSelfPermission(this,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)
+                bluetoothGatt!!.readCharacteristic(readCharacteristic)
+        }
     }
-
-
 
 }
