@@ -1,6 +1,7 @@
 package com.lux.zena.bluetooth2
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.*
 import android.bluetooth.le.*
@@ -90,11 +91,24 @@ class MainActivity : AppCompatActivity() {
     private var deviceMacAddresses:String=""
 
     private val leScanCallback: ScanCallback = object : ScanCallback() {
+
+
+
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
             //Log.i("blog","$callbackType, $result")
             if (result!=null){
                 deviceMacAddresses = result.device.toString()
+
+                //연결
+
+                val device :BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceMacAddresses)
+                bluetoothGatt = device?.connectGatt(this@MainActivity ,true, bluetoothGattCallback)
+
+                //스캔종료
+
+
+
                 Log.i("blog","$deviceMacAddresses")
             }
         }
@@ -133,6 +147,8 @@ class MainActivity : AppCompatActivity() {
                         val device :BluetoothDevice? = bluetoothAdapter?.getRemoteDevice(deviceMacAddresses)
                         bluetoothGatt=device?.connectGatt(this,true,bluetoothGattCallback)
 
+                        Log.e("TAG", "CONNECT GATT")
+
                     }
                 }
             }, scan_period)
@@ -157,6 +173,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun displayGattServices(gattServices: List<BluetoothGattService>?, gatt: BluetoothGatt){
         if (gattServices==null){
             Log.i("blog","gattService==null")
@@ -178,9 +195,35 @@ class MainActivity : AppCompatActivity() {
                 gattCharacteristics.descriptors.forEach { descriptor ->
                     Log.i("blog","descriptor: ${descriptor.uuid}")
                 }
+                gatt.readCharacteristic(gattCharacteristics)
+                Log.i("blog","read")
             }
             Log.i("blog","~~~~~~~~~~~~~~~")
         }
+
+        //
+
+        val device = gatt?.device
+
+        //
+
+        service= bluetoothGatt!!.getService(UUID.fromString("00001809-0000-1000-8000-00805f9b34fb"))
+        readCharacteristic=service.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805f9b34fb"))
+
+        val notifyDescriptor = readCharacteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+        notifyDescriptor.value = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+
+
+        bluetoothGatt?.apply {
+            Log.i("blog","write Descriptor")
+            writeDescriptor(notifyDescriptor)
+            setCharacteristicNotification(readCharacteristic, true)
+        }
+
+
+
+
+
     }
 
 
@@ -194,33 +237,54 @@ class MainActivity : AppCompatActivity() {
 
     private val bluetoothGattCallback = object : BluetoothGattCallback() {
 
+
+
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?
+        ) {
+            super.onCharacteristicChanged(gatt, characteristic)
+            Log.i("blog","characteristic changed")
+        }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt?,
+            characteristic: BluetoothGattCharacteristic?,
+            status: Int
+        ) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+            Log.i("blog","characteristic write")
+        }
+
         override fun onCharacteristicRead(
             gatt: BluetoothGatt?,
             characteristic: BluetoothGattCharacteristic?,
             status: Int
         ) {
             super.onCharacteristicRead(gatt, characteristic, status)
-            //Log.i("blog","onCharacteristicRead")
-            if (status==BluetoothGatt.GATT_SUCCESS){
-                Log.i("blog","onCharacteristicRead")
-                val readValue:ByteArray = characteristic!!.value
-                val decodeValue:String = readValue.toString(
-                    StandardCharsets.UTF_8
-                )
-                Log.i("blog","$decodeValue")
-            }else Log.i("blog","fail to Read")
+            Log.i("blog","onCharacteristicRead")
+//            if (status==BluetoothGatt.GATT_SUCCESS){
+//                Log.i("blog","onCharacteristicRead")
+//                val readValue:ByteArray = characteristic!!.value
+//                val decodeValue:String = readValue.toString(
+//                    StandardCharsets.UTF_8
+//                )
+//                Log.i("blog","$decodeValue")
+//            }else Log.i("blog","fail to Read")
         }
 
+        @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
             super.onServicesDiscovered(gatt, status)
             Log.i("blog","discovered")
             if (status==BluetoothGatt.GATT_SUCCESS){
                 Log.i("blog","success")
                 if (gatt!=null){
-                    displayGattServices(gatt.services,gatt)
-                    Log.i("blog","after read")
-                    gatt.readCharacteristic(readCharacteristic)
+                    Log.e("TAG", "${gatt.services} , $gatt @@@@")
 
+                    displayGattServices(gatt.services,gatt)
+                    Log.i("blog","after read ")
+                    //gatt.readCharacteristic(readCharacteristic)
                 }
             }
         }
@@ -233,8 +297,10 @@ class MainActivity : AppCompatActivity() {
 //                    }
                     Log.i("blog","connected")
                     runOnUiThread { Toast.makeText(this@MainActivity, "connect", Toast.LENGTH_SHORT).show() }
-                    if (ActivityCompat.checkSelfPermission(this@MainActivity,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)
+                    if (ActivityCompat.checkSelfPermission(this@MainActivity,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED){
+                        Log.e("TAG", "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                         gatt?.discoverServices()
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED ->{
                     Log.i("blog","disconnected")
@@ -243,14 +309,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        //        override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
-//            if (status==BluetoothGatt.GATT_SUCCESS){
-//                Log.i("blog","gat success")
-//                if (gatt!=null){
-//                    //isplayGattServices(gatt.services)
-//                }else Log.i("displayGattService","")
-//            }else Log.e("blog","got failed")
-//        }
     }
 
 
@@ -280,6 +338,8 @@ class MainActivity : AppCompatActivity() {
 
 
 
+
+
         var resultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult())
         {
             if(it.resultCode== Activity.RESULT_OK){
@@ -299,6 +359,16 @@ class MainActivity : AppCompatActivity() {
         }else{
             //Device bluetooth 연결 가능
             //Toast.makeText(this, "device can support bluetooth", Toast.LENGTH_SHORT).show()
+
+//            bluetoothAdapter?.bondedDevices?.forEach { deviceMacAddresses ->
+//
+//              if(deviceMacAddresses.address.equals("C6:AF:2E:CA:EE:1E")){
+//                  deviceMacAddresses.connectGatt(this@MainActivity, true, bluetoothGattCallback)
+//
+//              }
+//
+//            }
+
             if(!bluetoothAdapter!!.isEnabled){
                 var enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
                 var resultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()
@@ -321,18 +391,18 @@ class MainActivity : AppCompatActivity() {
             scanLeDevice()
         }
 
-        binding.tvRead.setOnClickListener {
-            service = bluetoothGatt!!.getService(UUID.fromString("00001809-0000-1000-8000-00805f9b34fb"))
-
-            readCharacteristic = service.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805F9B34FB"))
-
-            val descriptor:BluetoothGattDescriptor = readCharacteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805F9B34FB"))
-
-            //notifyDescriptor.value=BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-
-            if (ActivityCompat.checkSelfPermission(this,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)
-                bluetoothGatt!!.readCharacteristic(readCharacteristic)
-        }
+//        binding.tvRead.setOnClickListener {
+//            service = bluetoothGatt!!.getService(UUID.fromString("00001809-0000-1000-8000-00805f9b34fb"))
+//
+//            readCharacteristic = service.getCharacteristic(UUID.fromString("00002a1c-0000-1000-8000-00805F9B34FB"))
+//
+//            val notifyDescriptor:BluetoothGattDescriptor = readCharacteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805F9B34FB"))
+//
+//            notifyDescriptor.value=BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+//
+//            if (ActivityCompat.checkSelfPermission(this,Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED)
+//                bluetoothGatt!!.readCharacteristic(readCharacteristic)
+//        }
     }
 
 }
