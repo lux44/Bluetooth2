@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
+        @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
             //Log.i("blog","$callbackType, $result")
@@ -244,7 +245,7 @@ class MainActivity : AppCompatActivity() {
             characteristic: BluetoothGattCharacteristic?
         ) {
             super.onCharacteristicChanged(gatt, characteristic)
-            Log.i("blog","characteristic changed")
+            Log.i("blog","characteristic changed : ${characteristic.toString()}")
         }
 
         override fun onCharacteristicWrite(
