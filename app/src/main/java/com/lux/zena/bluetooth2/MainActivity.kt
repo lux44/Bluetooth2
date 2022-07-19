@@ -20,6 +20,7 @@ import androidx.core.app.ActivityCompat
 import com.lux.zena.bluetooth2.databinding.ActivityMainBinding
 import java.nio.charset.StandardCharsets
 import java.util.*
+import kotlin.experimental.and
 
 class MainActivity : AppCompatActivity() {
     
@@ -94,14 +95,10 @@ class MainActivity : AppCompatActivity() {
 
     private val leScanCallback: ScanCallback = object : ScanCallback() {
 
-
-
         @SuppressLint("MissingPermission")
         override fun onScanResult(callbackType: Int, result: ScanResult?) {
             super.onScanResult(callbackType, result)
             //Log.i("blog","$callbackType, $result")
-
-
             result?.let {
 
                 // 내가 찾는 조건이 존재할 때
@@ -111,11 +108,12 @@ class MainActivity : AppCompatActivity() {
 
                     Log.i("blog","연결 하는 맥 어드레스 ${result.device.address}")
                     bluetoothGatt = device?.connectGatt(this@MainActivity ,true, bluetoothGattCallback)
+                    bluetoothLeScanner.stopScan(this)
+                    Log.e("STOP","STOP SCAN")
+                }else {
+                    return
                 }
-
-
             }
-
         }
     }
 
@@ -183,6 +181,30 @@ class MainActivity : AppCompatActivity() {
     }
 
 
+    fun getParsingTemperature(byteArray: ByteArray?): String {
+        if(byteArray == null)
+            return "0.0"
+
+        if(byteArray.size > 5) {
+            //sb.append(String.format("%02x ", byteArray[idx] and 0xff.toByte()))
+            val sb = StringBuffer()
+            sb.append(String.format("%02x", byteArray[3] and 0xff.toByte()))
+            sb.append(String.format("%02x", byteArray[2] and 0xff.toByte()))
+            sb.append(String.format("%02x", byteArray[1] and 0xff.toByte()))
+
+            val temperature = Integer.parseInt(sb.toString(), 16)
+
+            val value: Float = if(String.format("%02x", byteArray[4] and 0xff.toByte()) == "ff") {
+                temperature.toFloat() / 10.toFloat()
+            } else
+                temperature.toFloat() / 100.0f
+            return value.toString()
+        }
+        else {
+            return "0.0"
+        }
+    }
+
 
     // 데이터 읽기
     // 데이터 읽기 위한 변수
@@ -198,8 +220,9 @@ class MainActivity : AppCompatActivity() {
             characteristic: BluetoothGattCharacteristic?
         ) {
             super.onCharacteristicChanged(gatt, characteristic)
-            
             Log.i("blog","characteristic changed : ${characteristic.toString()}, value : ${characteristic?.value.toString()}")
+            var tp = getParsingTemperature(characteristic?.value)
+            Log.i("blog","$tp")
         }
 
         override fun onCharacteristicWrite(
@@ -274,6 +297,7 @@ class MainActivity : AppCompatActivity() {
 
     }
 
+    @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         //setContentView(R.layout.activity_main)
